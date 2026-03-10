@@ -1,0 +1,70 @@
+// Demonstrates all constructs the luma parser understands.
+
+// Arithmetic & operator precedence
+let result = 1 + 2 * 3 - 4 / 2;
+let power  = 2 ** 10;
+let bits   = 0xFF & 0x0F | 0xF0 ^ 0x55;
+
+// Unary operators
+let neg    = -result;
+let inv    = not true;
+let flip   = ~bits;
+
+// Ranges
+let r1 = 0..10;
+let r2 = 0..=10;
+
+// Arrays
+let nums = [1, 2, 3, 4, 5];
+
+// Function calls and chaining
+fn square(n) {
+    return n * n;
+}
+
+fn apply(f, x) {
+    return f(x);
+}
+
+let sq = apply(square, 7);
+
+// If expressions
+let abs = if result < 0 { -result } else { result };
+
+// If / else if / else
+let grade = if result >= 90 {
+    "A"
+} else if result >= 80 {
+    "B"
+} else if result >= 70 {
+    "C"
+} else {
+    "F"
+};
+
+// Match expressions
+match result {
+    0       => "zero",
+    1       => "one",
+    _       => "many",
+}
+
+// Structs and enums
+struct Vec2 { x, y }
+enum Color { Red, Green, Blue }
+
+// Type alias
+type Point = Vec2;
+
+// Mutable variable with compound assignment
+let mut counter = 0;
+counter += 1;
+counter *= 2;
+
+// Import
+import std as std;
+
+// Exported function
+export fn double(n) {
+    return n * 2;
+}
