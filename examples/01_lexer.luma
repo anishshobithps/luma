@@ -1,0 +1,69 @@
+// This file shows every token the luma lexer can recognize.
+// Run: bun run scripts/run_lexer.ts examples/01_lexer.luma
+
+// Keywords
+let mut x = 42;
+fn greet(name) {
+    return name;
+}
+
+// Control flow
+if x > 0 {
+    let y = x * 2;
+} else {
+    let y = 0;
+}
+
+while x > 0 {
+    x -= 1;
+}
+
+for i in 0..10 {
+    continue;
+}
+
+// Types and data
+struct Point { x, y }
+enum Direction { North, South, East, West }
+type Alias = Point;
+
+// Match
+match x {
+    0 => "zero",
+    _ => "other",
+}
+
+// Literals
+let dec   = 255;
+let hex   = 0xFF;
+let oct   = 0o377;
+let bin   = 0b11111111;
+let flt   = 3.14;
+let msg   = "hello\nworld";
+let empty = "";
+
+// Operators
+let a = 1 + 2 - 3 * 4 / 5 % 6;
+let b = a ** 2;
+let c = a == b or a != b;
+let d = a < b and a <= b;
+let e = a > b and a >= b;
+let f = not true;
+let g = a << 1;
+let h = a >> 1;
+let i = a & b | b ^ a;
+
+// Compound assignment
+a += 1;
+a -= 1;
+a *= 2;
+a /= 2;
+a %= 3;
+
+// Range
+let range     = 0..10;
+let inclusive = 0..=10;
+
+// Import / export
+import math as m;
+export fn double(n) { return n * 2; }
