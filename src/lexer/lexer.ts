@@ -95,7 +95,7 @@ const lexNumber = (
                 const span = spanFrom(afterDigits, startPos, startLine, startLineStart)
                 return Either.left(lexError(error("expected hex digits after '0x'", span), source))
             }
-            const lexeme = "0x" + digits
+            const lexeme = "0" + next + digits
             return Either.right([makeToken("IntLiteral", lexeme, afterDigits, startPos, startLine, startLineStart), afterDigits])
         }
         if (next === "o" || next === "O") {
@@ -105,7 +105,7 @@ const lexNumber = (
                 const span = spanFrom(afterDigits, startPos, startLine, startLineStart)
                 return Either.left(lexError(error("expected octal digits after '0o'", span), source))
             }
-            const lexeme = "0o" + digits
+            const lexeme = "0" + next + digits
             return Either.right([makeToken("IntLiteral", lexeme, afterDigits, startPos, startLine, startLineStart), afterDigits])
         }
         if (next === "b" || next === "B") {
@@ -115,7 +115,7 @@ const lexNumber = (
                 const span = spanFrom(afterDigits, startPos, startLine, startLineStart)
                 return Either.left(lexError(error("expected binary digits after '0b'", span), source))
             }
-            const lexeme = "0b" + digits
+            const lexeme = "0" + next + digits
             return Either.right([makeToken("IntLiteral", lexeme, afterDigits, startPos, startLine, startLineStart), afterDigits])
         }
     }
