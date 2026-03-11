@@ -304,6 +304,42 @@ describe("lex - string literals", () => {
     test("invalid escape sequence errors", () => {
         expect(fails('"\\q"')).toBe(true)
     })
+
+    test("interpolated string with only text emits StringLiteral", () => {
+        expect(kinds('"hello"')).toEqual(["StringLiteral", "Eof"])
+    })
+
+    test("interpolated string emits InterpStart Identifier InterpEnd", () => {
+        expect(kinds('"Hello, {name}!"')).toEqual(["InterpStart", "Identifier", "InterpEnd", "Eof"])
+    })
+
+    test("InterpStart lexeme is the prefix text", () => {
+        expect(lexemes('"Hello, {name}!"')).toEqual(["Hello, ", "name", "!", ""])
+    })
+
+    test("interpolation with no prefix text", () => {
+        expect(kinds('"{x}"')).toEqual(["InterpStart", "Identifier", "InterpEnd", "Eof"])
+    })
+
+    test("InterpStart lexeme is empty when no prefix", () => {
+        expect(lexemes('"{x}"')).toEqual(["", "x", "", ""])
+    })
+
+    test("multiple interpolation holes emit InterpMiddle", () => {
+        expect(kinds('"{a} and {b}"')).toEqual([
+            "InterpStart", "Identifier", "InterpMiddle", "Identifier", "InterpEnd", "Eof",
+        ])
+    })
+
+    test("InterpMiddle lexeme is text between holes", () => {
+        expect(lexemes('"{a} and {b}"')).toEqual(["", "a", " and ", "b", "", ""])
+    })
+
+    test("interpolation with expression tokens", () => {
+        expect(kinds('"val: {1 + 2}"')).toEqual([
+            "InterpStart", "IntLiteral", "Plus", "IntLiteral", "InterpEnd", "Eof",
+        ])
+    })
 })
 
 describe("lex - spans", () => {

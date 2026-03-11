@@ -640,3 +640,37 @@ describe("interpreter - type and import declarations", () => {
         expect(eval_("import math;")).toBe("nil")
     })
 })
+
+describe("interpreter - string interpolation", () => {
+    test("basic variable interpolation", () => {
+        expect(eval_('let name = "Luma"; "Hello, {name}!";')).toBe("Hello, Luma!")
+    })
+
+    test("interpolation with arithmetic", () => {
+        expect(eval_('"result: {1 + 2}";')).toBe("result: 3")
+    })
+
+    test("multiple holes", () => {
+        expect(eval_('let a = 1; let b = 2; "{a} + {b} = {a + b}";')).toBe("1 + 2 = 3")
+    })
+
+    test("no holes is same as plain string", () => {
+        expect(eval_('"just text";')).toBe("just text")
+    })
+
+    test("interpolation with function call", () => {
+        expect(eval_('fn double(n) { return n * 2; } "double 5 is {double(5)}";')).toBe("double 5 is 10")
+    })
+
+    test("interpolation converts int to string", () => {
+        expect(eval_('"x = {42}";')).toBe("x = 42")
+    })
+
+    test("interpolation converts bool to string", () => {
+        expect(eval_('"flag: {true}";')).toBe("flag: true")
+    })
+
+    test("nested interpolation expression", () => {
+        expect(eval_('let x = 10; "double is {x * 2} and triple is {x * 3}";')).toBe("double is 20 and triple is 30")
+    })
+})

@@ -5,6 +5,7 @@ export type Expr =
     | IntLiteral
     | FloatLiteral
     | StringLiteral
+    | InterpExpr
     | BoolLiteral
     | NilLiteral
     | Identifier
@@ -46,6 +47,11 @@ export class FloatLiteral extends Schema.TaggedClass<FloatLiteral>()("FloatLiter
 
 export class StringLiteral extends Schema.TaggedClass<StringLiteral>()("StringLiteral", {
     value: Schema.String,
+    span: Schema.instanceOf(Span),
+}) { }
+
+export class InterpExpr extends Schema.TaggedClass<InterpExpr>()("InterpExpr", {
+    parts: Schema.Array(Schema.suspend(exprS)),
     span: Schema.instanceOf(Span),
 }) { }
 
@@ -179,6 +185,7 @@ export const ExprSchema: Schema.Schema<Expr, any> = Schema.Union(
     IntLiteral,
     FloatLiteral,
     StringLiteral,
+    InterpExpr,
     BoolLiteral,
     NilLiteral,
     Identifier,

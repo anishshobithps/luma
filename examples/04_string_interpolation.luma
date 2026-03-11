@@ -1,0 +1,14 @@
+let name = "Luma";
+let version = 1;
+
+print("Welcome to {name} v{version}!");
+
+fn greet(who) {
+    return "Hello, {who}!";
+}
+
+print(greet("world"));
+
+let a = 10;
+let b = 20;
+print("{a} + {b} = {a + b}");

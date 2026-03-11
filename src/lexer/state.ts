@@ -7,6 +7,7 @@ export type LexState = {
     readonly pos: number
     readonly line: number
     readonly lineStart: number
+    readonly interpDepth: number
 }
 
 export const initial = (source: string, file: string): LexState => ({
@@ -15,6 +16,7 @@ export const initial = (source: string, file: string): LexState => ({
     pos: 0,
     line: 0,
     lineStart: 0,
+    interpDepth: 0,
 })
 
 export const peek = (state: LexState): Option.Option<string> =>

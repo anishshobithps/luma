@@ -75,6 +75,9 @@ export const TokenKind = Schema.Literal(
     "IntLiteral",
     "FloatLiteral",
     "StringLiteral",
+    "InterpStart",
+    "InterpMiddle",
+    "InterpEnd",
     "Eof",
 )
 export type TokenKind = typeof TokenKind.Type

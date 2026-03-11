@@ -203,10 +203,27 @@ const evalMatchArms = (
     return evalExpr(arm.body, env)
 }
 
+const evalInterpParts = (
+    parts: ReadonlyArray<Expr>,
+    i: number,
+    acc: string,
+    env: Env,
+): EvalResult => {
+    if (i >= parts.length) return Either.right(val(Str(acc)))
+    return pipe(
+        evalExpr(parts[i]!, env),
+        Either.flatMap((s) => {
+            if (s._tag !== "Value") return Either.right(s)
+            return evalInterpParts(parts, i + 1, acc + display(s.value), env)
+        })
+    )
+}
+
 const evalExpr = (expr: Expr, env: Env): EvalResult => {
     if (expr._tag === "IntLiteral") return Either.right(val(Int(expr.value)))
     if (expr._tag === "FloatLiteral") return Either.right(val(Float(expr.value)))
     if (expr._tag === "StringLiteral") return Either.right(val(Str(expr.value)))
+    if (expr._tag === "InterpExpr") return evalInterpParts(expr.parts, 0, "", env)
     if (expr._tag === "BoolLiteral") return Either.right(val(Bool(expr.value)))
     if (expr._tag === "NilLiteral") return Either.right(val(Nil))
     if (expr._tag === "BreakExpr") return Either.right(brk)

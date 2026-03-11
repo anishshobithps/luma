@@ -3,7 +3,7 @@ import { error } from "@/diagnostic/diagnostic"
 import {
     ArrayExpr, AssignExpr, BinaryExpr, BlockExpr, BoolLiteral,
     BreakExpr, CallExpr, ContinueExpr, ExprStmt, FieldExpr, FloatLiteral,
-    ForExpr, Identifier, IfExpr, IndexExpr, IntLiteral, LetStmt, MatchArm,
+    ForExpr, Identifier, IfExpr, IndexExpr, InterpExpr, IntLiteral, LetStmt, MatchArm,
     MatchExpr, NilLiteral, RangeExpr, ReturnStmt, StringLiteral, UnaryExpr,
     WhileExpr, type Expr, type Stmt,
 } from "@/ast/expr"
@@ -59,6 +59,33 @@ const unaryOpFor = (kind: string): string | null => {
     return null
 }
 
+const parseInterpParts = (state: ParseState, acc: ReadonlyArray<Expr>, startSpan: Span): PR<Expr> =>
+    pipe(
+        parseExpr(state),
+        Either.flatMap(([exprNode, s1]) => {
+            const next = peek(s1)
+            if (next.kind === "InterpEnd") {
+                const [endTok, s2] = advance(s1)
+                return Either.right([
+                    new InterpExpr({
+                        parts: [...acc, exprNode, new StringLiteral({ value: endTok.lexeme, span: endTok.span })],
+                        span: startSpan,
+                    }),
+                    s2,
+                ] as [Expr, ParseState])
+            }
+            if (next.kind === "InterpMiddle") {
+                const [midTok, s2] = advance(s1)
+                return parseInterpParts(
+                    s2,
+                    [...acc, exprNode, new StringLiteral({ value: midTok.lexeme, span: midTok.span })],
+                    startSpan,
+                )
+            }
+            return Either.left(fail("expected closing string segment after interpolation", next.span, state.source))
+        })
+    )
+
 const parsePrimary = (state: ParseState): PR<Expr> => {
     const tok = peek(state)
     const [, s1] = advance(state)
@@ -87,6 +114,10 @@ const parsePrimary = (state: ParseState): PR<Expr> => {
         Match.when("StringLiteral", () =>
             Either.right([new StringLiteral({ value: tok.lexeme, span: tok.span }), s1] as [Expr, ParseState])
         ),
+        Match.when("InterpStart", () => {
+            const prefix = new StringLiteral({ value: tok.lexeme, span: tok.span })
+            return parseInterpParts(s1, [prefix], tok.span)
+        }),
         Match.when("True", () =>
             Either.right([new BoolLiteral({ value: true, span: tok.span }), s1] as [Expr, ParseState])
         ),
@@ -121,190 +152,6 @@ const parsePrimary = (state: ParseState): PR<Expr> => {
             tok.span,
             state.source,
         )))
-    )
-}
-
-const parseWhileExpr = (state: ParseState, startSpan: Span): PR<Expr> =>
-    pipe(
-        parseExpr(state),
-        Either.flatMap(([condition, s1]) =>
-            pipe(
-                expect(s1, "LeftBrace"),
-                Either.flatMap(([, s2]) => parseBlockExpr(s2, currentSpan(s2))),
-                Either.map(([body, s3]) => [
-                    new WhileExpr({ condition, body: body as BlockExpr, span: startSpan }),
-                    s3,
-                ] as [Expr, ParseState])
-            )
-        )
-    )
-
-const parseForExpr = (state: ParseState, startSpan: Span): PR<Expr> => {
-    const varTok = peek(state)
-    if (varTok.kind !== "Identifier")
-        return Either.left(fail(`expected identifier after 'for', got '${varTok.kind}'`, varTok.span, state.source))
-    const [, s1] = advance(state)
-    return pipe(
-        expect(s1, "In"),
-        Either.flatMap(([, s2]) =>
-            pipe(
-                parseExpr(s2),
-                Either.flatMap(([iterable, s3]) =>
-                    pipe(
-                        expect(s3, "LeftBrace"),
-                        Either.flatMap(([, s4]) => parseBlockExpr(s4, currentSpan(s4))),
-                        Either.map(([body, s5]) => [
-                            new ForExpr({ variable: varTok.lexeme, iterable, body: body as BlockExpr, span: startSpan }),
-                            s5,
-                        ] as [Expr, ParseState])
-                    )
-                )
-            )
-        )
-    )
-}
-
-const parseArrayExpr = (state: ParseState, startSpan: Span): PR<Expr> => {
-    if (check(state, "RightBracket")) {
-        const [, s1] = advance(state)
-        return Either.right([new ArrayExpr({ elements: [], span: startSpan }), s1])
-    }
-    return pipe(
-        parseExprList(state, "RightBracket"),
-        Either.flatMap(([elements, s1]) =>
-            pipe(
-                expect(s1, "RightBracket"),
-                Either.map(([closeTok, s2]) => [
-                    new ArrayExpr({ elements, span: spanFrom(startSpan, closeTok.span) }),
-                    s2,
-                ] as [Expr, ParseState])
-            )
-        )
-    )
-}
-
-const parseExprList = (state: ParseState, terminator: string): Either.Either<[ReadonlyArray<Expr>, ParseState], ParseError> =>
-    pipe(
-        parseExpr(state),
-        Either.flatMap(([first, s1]) => collectExprList(s1, [first], terminator))
-    )
-
-const collectExprList = (
-    state: ParseState,
-    acc: ReadonlyArray<Expr>,
-    terminator: string,
-): Either.Either<[ReadonlyArray<Expr>, ParseState], ParseError> => {
-    if (!check(state, "Comma")) return Either.right([acc, state])
-    const [, s1] = advance(state)
-    if (check(s1, terminator)) return Either.right([acc, s1])
-    return pipe(
-        parseExpr(s1),
-        Either.flatMap(([expr, s2]) => collectExprList(s2, Array.append(acc, expr), terminator))
-    )
-}
-
-const parseBlockExpr = (state: ParseState, startSpan: Span): PR<Expr> =>
-    pipe(
-        collectStmts(state, []),
-        Either.flatMap(([stmts, s1]) =>
-            pipe(
-                expect(s1, "RightBrace"),
-                Either.map(([closeTok, s2]) => [
-                    new BlockExpr({ stmts, span: spanFrom(startSpan, closeTok.span) }),
-                    s2,
-                ] as [Expr, ParseState])
-            )
-        )
-    )
-
-const collectStmts = (state: ParseState, acc: ReadonlyArray<Stmt>): Either.Either<[ReadonlyArray<Stmt>, ParseState], ParseError> => {
-    if (check(state, "RightBrace", "Eof")) return Either.right([acc, state])
-    return pipe(
-        parseStmt(state),
-        Either.flatMap(([stmt, s1]) => collectStmts(s1, Array.append(acc, stmt)))
-    )
-}
-
-const parseIfExpr = (state: ParseState, startSpan: Span): PR<Expr> =>
-    pipe(
-        parseExpr(state),
-        Either.flatMap(([condition, s1]) =>
-            pipe(
-                expect(s1, "LeftBrace"),
-                Either.flatMap(([, s2]) => parseBlockExpr(s2, currentSpan(s2))),
-                Either.flatMap(([thenBlock, s3]) => {
-                    if (!check(s3, "Else")) {
-                        return Either.right([
-                            new IfExpr({ condition, then: thenBlock as BlockExpr, else_: Option.none(), span: startSpan }),
-                            s3,
-                        ] as [Expr, ParseState])
-                    }
-                    const [, s4] = advance(s3)
-                    if (check(s4, "If")) {
-                        const [, s5] = advance(s4)
-                        return pipe(
-                            parseIfExpr(s5, currentSpan(s5)),
-                            Either.map(([elseIfExpr, s6]) => [
-                                new IfExpr({ condition, then: thenBlock as BlockExpr, else_: Option.some(elseIfExpr), span: startSpan }),
-                                s6,
-                            ] as [Expr, ParseState])
-                        )
-                    }
-                    return pipe(
-                        expect(s4, "LeftBrace"),
-                        Either.flatMap(([, s5]) => parseBlockExpr(s5, currentSpan(s5))),
-                        Either.map(([elseBlock, s6]) => [
-                            new IfExpr({ condition, then: thenBlock as BlockExpr, else_: Option.some(elseBlock), span: startSpan }),
-                            s6,
-                        ] as [Expr, ParseState])
-                    )
-                })
-            )
-        )
-    )
-
-const parseMatchExpr = (state: ParseState, startSpan: Span): PR<Expr> =>
-    pipe(
-        parseExpr(state),
-        Either.flatMap(([scrutinee, s1]) =>
-            pipe(
-                expect(s1, "LeftBrace"),
-                Either.flatMap(([, s2]) => collectMatchArms(s2, [])),
-                Either.flatMap(([arms, s3]) =>
-                    pipe(
-                        expect(s3, "RightBrace"),
-                        Either.map(([closeTok, s4]) => [
-                            new MatchExpr({ scrutinee, arms, span: spanFrom(startSpan, closeTok.span) }),
-                            s4,
-                        ] as [Expr, ParseState])
-                    )
-                )
-            )
-        )
-    )
-
-const collectMatchArms = (
-    state: ParseState,
-    acc: ReadonlyArray<MatchArm>,
-): Either.Either<[ReadonlyArray<MatchArm>, ParseState], ParseError> => {
-    if (check(state, "RightBrace", "Eof")) return Either.right([acc, state])
-    return pipe(
-        parseExpr(state),
-        Either.flatMap(([pattern, s1]) =>
-            pipe(
-                expect(s1, "FatArrow"),
-                Either.flatMap(([, s2]) =>
-                    pipe(
-                        parseExpr(s2),
-                        Either.flatMap(([body, s3]) => {
-                            const arm = new MatchArm({ pattern, body, span: pattern.span })
-                            const s4 = check(s3, "Comma") ? advance(s3)[1] : s3
-                            return collectMatchArms(s4, Array.append(acc, arm))
-                        })
-                    )
-                )
-            )
-        )
     )
 }
 
@@ -598,7 +445,188 @@ const parseStmt = (state: ParseState): Either.Either<[Stmt, ParseState], ParseEr
     )
 }
 
-const parseFnDecl = (state: ParseState, startSpan: Span, exported: boolean): PR<Decl> => {
+const parseBlockExpr = (state: ParseState, startSpan: Span): PR<Expr> =>
+    pipe(
+        collectStmts(state, []),
+        Either.flatMap(([stmts, s1]) =>
+            pipe(
+                expect(s1, "RightBrace"),
+                Either.map(([closeTok, s2]) => [
+                    new BlockExpr({ stmts, span: spanFrom(startSpan, closeTok.span) }),
+                    s2,
+                ] as [Expr, ParseState])
+            )
+        )
+    )
+
+const collectStmts = (
+    state: ParseState,
+    acc: ReadonlyArray<Stmt>,
+): Either.Either<[ReadonlyArray<Stmt>, ParseState], ParseError> => {
+    if (check(state, "RightBrace", "Eof")) return Either.right([acc, state])
+    return pipe(
+        parseStmt(state),
+        Either.flatMap(([stmt, s1]) => collectStmts(s1, Array.append(acc, stmt)))
+    )
+}
+
+const parseArrayExpr = (state: ParseState, startSpan: Span): PR<Expr> =>
+    pipe(
+        parseExprList(state, "RightBracket"),
+        Either.flatMap(([elements, s1]) =>
+            pipe(
+                expect(s1, "RightBracket"),
+                Either.map(([closeTok, s2]) => [
+                    new ArrayExpr({ elements, span: spanFrom(startSpan, closeTok.span) }),
+                    s2,
+                ] as [Expr, ParseState])
+            )
+        )
+    )
+
+const parseExprList = (state: ParseState, terminator: string): Either.Either<[ReadonlyArray<Expr>, ParseState], ParseError> =>
+    collectExprList(state, terminator, [])
+
+const collectExprList = (
+    state: ParseState,
+    terminator: string,
+    acc: ReadonlyArray<Expr>,
+): Either.Either<[ReadonlyArray<Expr>, ParseState], ParseError> => {
+    if (check(state, terminator, "Eof")) return Either.right([acc, state])
+    return pipe(
+        parseExpr(state),
+        Either.flatMap(([expr, s1]) => {
+            const updated = Array.append(acc, expr)
+            if (!check(s1, "Comma")) return Either.right([updated, s1])
+            const [, s2] = advance(s1)
+            return collectExprList(s2, terminator, updated)
+        })
+    )
+}
+
+const parseIfExpr = (state: ParseState, startSpan: Span): PR<Expr> =>
+    pipe(
+        parseExpr(state),
+        Either.flatMap(([condition, s1]) =>
+            pipe(
+                expect(s1, "LeftBrace"),
+                Either.flatMap(([, s2]) => parseBlockExpr(s2, currentSpan(s2))),
+                Either.flatMap(([thenBlock, s3]) => {
+                    if (!check(s3, "Else"))
+                        return Either.right([
+                            new IfExpr({ condition, then: thenBlock as BlockExpr, else_: Option.none(), span: startSpan }),
+                            s3,
+                        ] as [Expr, ParseState])
+                    const [, s4] = advance(s3)
+                    if (check(s4, "If")) {
+                        const [, s5] = advance(s4)
+                        return pipe(
+                            parseIfExpr(s5, currentSpan(s4)),
+                            Either.map(([elseIf, s6]) => [
+                                new IfExpr({ condition, then: thenBlock as BlockExpr, else_: Option.some(elseIf), span: startSpan }),
+                                s6,
+                            ] as [Expr, ParseState])
+                        )
+                    }
+                    return pipe(
+                        expect(s4, "LeftBrace"),
+                        Either.flatMap(([, s5]) => parseBlockExpr(s5, currentSpan(s5))),
+                        Either.map(([elseBlock, s6]) => [
+                            new IfExpr({ condition, then: thenBlock as BlockExpr, else_: Option.some(elseBlock), span: startSpan }),
+                            s6,
+                        ] as [Expr, ParseState])
+                    )
+                })
+            )
+        )
+    )
+
+const parseWhileExpr = (state: ParseState, startSpan: Span): PR<Expr> =>
+    pipe(
+        parseExpr(state),
+        Either.flatMap(([condition, s1]) =>
+            pipe(
+                expect(s1, "LeftBrace"),
+                Either.flatMap(([, s2]) => parseBlockExpr(s2, currentSpan(s2))),
+                Either.map(([body, s3]) => [
+                    new WhileExpr({ condition, body: body as BlockExpr, span: startSpan }),
+                    s3,
+                ] as [Expr, ParseState])
+            )
+        )
+    )
+
+const parseForExpr = (state: ParseState, startSpan: Span): PR<Expr> => {
+    const varTok = peek(state)
+    if (varTok.kind !== "Identifier")
+        return Either.left(fail(`expected identifier after 'for', got '${varTok.kind}'`, varTok.span, state.source))
+    const [, s1] = advance(state)
+    return pipe(
+        expect(s1, "In"),
+        Either.flatMap(([, s2]) =>
+            pipe(
+                parseExpr(s2),
+                Either.flatMap(([iterable, s3]) =>
+                    pipe(
+                        expect(s3, "LeftBrace"),
+                        Either.flatMap(([, s4]) => parseBlockExpr(s4, currentSpan(s4))),
+                        Either.map(([body, s5]) => [
+                            new ForExpr({ variable: varTok.lexeme, iterable, body: body as BlockExpr, span: startSpan }),
+                            s5,
+                        ] as [Expr, ParseState])
+                    )
+                )
+            )
+        )
+    )
+}
+
+const parseMatchExpr = (state: ParseState, startSpan: Span): PR<Expr> =>
+    pipe(
+        parseExpr(state),
+        Either.flatMap(([scrutinee, s1]) =>
+            pipe(
+                expect(s1, "LeftBrace"),
+                Either.flatMap(([, s2]) => collectMatchArms(s2, [])),
+                Either.flatMap(([arms, s3]) =>
+                    pipe(
+                        expect(s3, "RightBrace"),
+                        Either.map(([closeTok, s4]) => [
+                            new MatchExpr({ scrutinee, arms, span: spanFrom(startSpan, closeTok.span) }),
+                            s4,
+                        ] as [Expr, ParseState])
+                    )
+                )
+            )
+        )
+    )
+
+const collectMatchArms = (
+    state: ParseState,
+    acc: ReadonlyArray<MatchArm>,
+): Either.Either<[ReadonlyArray<MatchArm>, ParseState], ParseError> => {
+    if (check(state, "RightBrace", "Eof")) return Either.right([acc, state])
+    return pipe(
+        parseExpr(state),
+        Either.flatMap(([pattern, s1]) =>
+            pipe(
+                expect(s1, "FatArrow"),
+                Either.flatMap(([, s2]) =>
+                    pipe(
+                        parseExpr(s2),
+                        Either.flatMap(([body, s3]) => {
+                            const arm = new MatchArm({ pattern, body, span: pattern.span })
+                            const s4 = check(s3, "Comma") ? advance(s3)[1] : s3
+                            return collectMatchArms(s4, Array.append(acc, arm))
+                        })
+                    )
+                )
+            )
+        )
+    )
+}
+
+const parseFnDecl = (state: ParseState, startSpan: Span, exported: boolean): Either.Either<[Decl, ParseState], ParseError> => {
     const nameTok = peek(state)
     if (nameTok.kind !== "Identifier")
         return Either.left(fail(`expected function name, got '${nameTok.kind}'`, nameTok.span, state.source))
@@ -636,7 +664,7 @@ const collectParams = (state: ParseState, acc: ReadonlyArray<Param>): Either.Eit
     return collectParams(s2, Array.append(acc, param))
 }
 
-const parseStructDecl = (state: ParseState, startSpan: Span): PR<Decl> => {
+const parseStructDecl = (state: ParseState, startSpan: Span): Either.Either<[Decl, ParseState], ParseError> => {
     const nameTok = peek(state)
     if (nameTok.kind !== "Identifier")
         return Either.left(fail(`expected struct name, got '${nameTok.kind}'`, nameTok.span, state.source))
@@ -668,7 +696,7 @@ const collectStructFields = (state: ParseState, acc: ReadonlyArray<StructField>)
     return collectStructFields(s2, Array.append(acc, field))
 }
 
-const parseEnumDecl = (state: ParseState, startSpan: Span): PR<Decl> => {
+const parseEnumDecl = (state: ParseState, startSpan: Span): Either.Either<[Decl, ParseState], ParseError> => {
     const nameTok = peek(state)
     if (nameTok.kind !== "Identifier")
         return Either.left(fail(`expected enum name, got '${nameTok.kind}'`, nameTok.span, state.source))
@@ -700,93 +728,96 @@ const collectEnumVariants = (state: ParseState, acc: ReadonlyArray<EnumVariant>)
     return collectEnumVariants(s2, Array.append(acc, variant))
 }
 
-const parseTypeDecl = (state: ParseState, startSpan: Span): PR<Decl> => {
-    const nameTok = peek(state)
-    if (nameTok.kind !== "Identifier")
-        return Either.left(fail(`expected type name, got '${nameTok.kind}'`, nameTok.span, state.source))
-    const [, s1] = advance(state)
-    return pipe(
-        expect(s1, "Equal"),
-        Either.flatMap(([, s2]) => {
-            const aliasTok = peek(s2)
-            if (aliasTok.kind !== "Identifier")
-                return Either.left(fail(`expected type alias, got '${aliasTok.kind}'`, aliasTok.span, state.source))
-            const [, s3] = advance(s2)
-            const s4 = check(s3, "Semicolon") ? advance(s3)[1] : s3
-            return Either.right([
-                new TypeDecl({ name: nameTok.lexeme, alias: aliasTok.lexeme, span: startSpan }),
-                s4,
-            ] as [Decl, ParseState])
-        })
-    )
-}
+const parseTopLevel = (state: ParseState): Either.Either<[TopLevel, ParseState], ParseError> => {
+    const tok = peek(state)
+    const startSpan = tok.span
 
-const parseImportDecl = (state: ParseState, startSpan: Span): PR<Decl> => {
-    const pathTok = peek(state)
-    if (pathTok.kind !== "Identifier")
-        return Either.left(fail(`expected module path, got '${pathTok.kind}'`, pathTok.span, state.source))
-    const [, s1] = advance(state)
-    if (check(s1, "As")) {
+    if (check(state, "Export")) {
+        const [, s1] = advance(state)
+        if (!check(s1, "Fn"))
+            return Either.left(fail(`expected 'fn' after 'export', got '${peek(s1).kind}'`, peek(s1).span, state.source))
+        const [, s2] = advance(s1)
+        return parseFnDecl(s2, startSpan, true)
+    }
+
+    if (check(state, "Fn")) {
+        const [, s1] = advance(state)
+        return parseFnDecl(s1, startSpan, false)
+    }
+
+    if (check(state, "Struct")) {
+        const [, s1] = advance(state)
+        return parseStructDecl(s1, startSpan)
+    }
+
+    if (check(state, "Enum")) {
+        const [, s1] = advance(state)
+        return parseEnumDecl(s1, startSpan)
+    }
+
+    if (check(state, "Type")) {
+        const [, s1] = advance(state)
+        const nameTok = peek(s1)
+        if (nameTok.kind !== "Identifier")
+            return Either.left(fail(`expected type name, got '${nameTok.kind}'`, nameTok.span, state.source))
         const [, s2] = advance(s1)
         return pipe(
-            expect(s2, "Identifier"),
-            Either.flatMap(([aliasTok, s3]) => {
-                const s4 = check(s3, "Semicolon") ? advance(s3)[1] : s3
-                return Either.right([
-                    new ImportDecl({ path: pathTok.lexeme, alias: Option.some(aliasTok.lexeme), span: startSpan }),
-                    s4,
-                ] as [Decl, ParseState])
+            expect(s2, "Equal"),
+            Either.flatMap(([, s3]) => {
+                const aliasTok = peek(s3)
+                if (aliasTok.kind !== "Identifier")
+                    return Either.left(fail(`expected type alias, got '${aliasTok.kind}'`, aliasTok.span, state.source))
+                const [, s4] = advance(s3)
+                const s5 = check(s4, "Semicolon") ? advance(s4)[1] : s4
+                return Either.right([new TypeDecl({ name: nameTok.lexeme, alias: aliasTok.lexeme, span: startSpan }), s5] as [Decl, ParseState])
             })
         )
     }
-    const s2 = check(s1, "Semicolon") ? advance(s1)[1] : s1
-    return Either.right([
-        new ImportDecl({ path: pathTok.lexeme, alias: Option.none(), span: startSpan }),
-        s2,
-    ] as [Decl, ParseState])
+
+    if (check(state, "Import")) {
+        const [, s1] = advance(state)
+        const pathTok = peek(s1)
+        if (pathTok.kind !== "Identifier")
+            return Either.left(fail(`expected module path, got '${pathTok.kind}'`, pathTok.span, state.source))
+        const [, s2] = advance(s1)
+        if (check(s2, "As")) {
+            const [, s3] = advance(s2)
+            const aliasTok = peek(s3)
+            if (aliasTok.kind !== "Identifier")
+                return Either.left(fail(`expected alias, got '${aliasTok.kind}'`, aliasTok.span, state.source))
+            const [, s4] = advance(s3)
+            const s5 = check(s4, "Semicolon") ? advance(s4)[1] : s4
+            return Either.right([new ImportDecl({ path: pathTok.lexeme, alias: Option.some(aliasTok.lexeme), span: startSpan }), s5] as [Decl, ParseState])
+        }
+        const s3 = check(s2, "Semicolon") ? advance(s2)[1] : s2
+        return Either.right([new ImportDecl({ path: pathTok.lexeme, alias: Option.none(), span: startSpan }), s3] as [Decl, ParseState])
+    }
+
+    return parseStmt(state)
 }
 
-const parseDecl = (state: ParseState): PR<TopLevel> => {
-    const tok = peek(state)
-    const [, s1] = advance(state)
-    return Match.value(tok.kind).pipe(
-        Match.when("Fn", () => parseFnDecl(s1, tok.span, false)),
-        Match.when("Struct", () => parseStructDecl(s1, tok.span)),
-        Match.when("Enum", () => parseEnumDecl(s1, tok.span)),
-        Match.when("Type", () => parseTypeDecl(s1, tok.span)),
-        Match.when("Import", () => parseImportDecl(s1, tok.span)),
-        Match.when("Export", () => {
-            const inner = peek(s1)
-            const [, s2] = advance(s1)
-            return Match.value(inner.kind).pipe(
-                Match.when("Fn", () => parseFnDecl(s2, inner.span, true)),
-                Match.orElse(() => Either.left(fail("only 'fn' can be exported", inner.span, state.source)))
-            )
-        }),
-        Match.orElse(() =>
-            pipe(
-                parseStmt(state),
-                Either.map(([stmt, s2]) => [stmt, s2] as [TopLevel, ParseState])
-            )
-        )
-    )
-}
-
-const collectDecls = (state: ParseState, acc: ReadonlyArray<TopLevel>): Either.Either<[ReadonlyArray<TopLevel>, ParseState], ParseError> => {
+const collectTopLevels = (
+    state: ParseState,
+    acc: ReadonlyArray<TopLevel>,
+): Either.Either<[ReadonlyArray<TopLevel>, ParseState], ParseError> => {
     if (check(state, "Eof")) return Either.right([acc, state])
     return pipe(
-        parseDecl(state),
-        Either.flatMap(([decl, s1]) => collectDecls(s1, Array.append(acc, decl)))
+        parseTopLevel(state),
+        Either.flatMap(([decl, s1]) => collectTopLevels(s1, Array.append(acc, decl)))
     )
 }
 
-export const parse = (tokens: ReadonlyArray<import("@/lexer/token").Token>, source: string, file: string): Either.Either<Program, ParseError> => {
+export const parse = (
+    tokens: ReadonlyArray<import("@/lexer/token").Token>,
+    source: string,
+    file: string,
+): Either.Either<Program, ParseError> => {
     const state = initial(tokens, source, file)
-    const eofSpan = tokens.length > 0
-        ? tokens[tokens.length - 1]!.span
-        : new Span({ file, line: 0, column: 0, length: 1 })
     return pipe(
-        collectDecls(state, []),
-        Either.map(([decls]) => new Program({ decls, span: eofSpan }))
+        collectTopLevels(state, []),
+        Either.flatMap(([decls, s1]) => {
+            const eofTok = peek(s1)
+            return Either.right(new Program({ decls, span: eofTok.span }))
+        })
     )
 }
