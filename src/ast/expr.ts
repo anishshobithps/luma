@@ -19,6 +19,10 @@ export type Expr =
     | BlockExpr
     | IfExpr
     | MatchExpr
+    | WhileExpr
+    | ForExpr
+    | BreakExpr
+    | ContinueExpr
 
 export type Stmt =
     | LetStmt
@@ -133,6 +137,27 @@ export class MatchExpr extends Schema.TaggedClass<MatchExpr>()("MatchExpr", {
     span: Schema.instanceOf(Span),
 }) { }
 
+export class WhileExpr extends Schema.TaggedClass<WhileExpr>()("WhileExpr", {
+    condition: Schema.suspend(exprS),
+    body: Schema.suspend(blockS),
+    span: Schema.instanceOf(Span),
+}) { }
+
+export class ForExpr extends Schema.TaggedClass<ForExpr>()("ForExpr", {
+    variable: Schema.String,
+    iterable: Schema.suspend(exprS),
+    body: Schema.suspend(blockS),
+    span: Schema.instanceOf(Span),
+}) { }
+
+export class BreakExpr extends Schema.TaggedClass<BreakExpr>()("BreakExpr", {
+    span: Schema.instanceOf(Span),
+}) { }
+
+export class ContinueExpr extends Schema.TaggedClass<ContinueExpr>()("ContinueExpr", {
+    span: Schema.instanceOf(Span),
+}) { }
+
 export class LetStmt extends Schema.TaggedClass<LetStmt>()("LetStmt", {
     name: Schema.String,
     mutable: Schema.Boolean,
@@ -168,6 +193,10 @@ export const ExprSchema: Schema.Schema<Expr, any> = Schema.Union(
     BlockExpr,
     IfExpr,
     MatchExpr,
+    WhileExpr,
+    ForExpr,
+    BreakExpr,
+    ContinueExpr,
 )
 
 export const StmtSchema: Schema.Schema<Stmt, any> = Schema.Union(
