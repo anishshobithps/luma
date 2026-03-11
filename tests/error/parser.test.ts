@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test"
+import { Effect, Schema } from "effect"
 import { ParseError } from "@/error/parser"
 import { error } from "@/diagnostic/diagnostic"
 import { Span } from "@/diagnostic/span"
@@ -40,5 +41,33 @@ describe("ParseError", () => {
         const output = err.render()
         expect(output).toContain("error[P001]: unexpected token")
         expect(output).toContain("= note: expected a declaration")
+    })
+
+    test("make() creates a ParseError", () => {
+        const err = ParseError.make({ diagnostic, source })
+        expect(err).toBeInstanceOf(ParseError)
+        expect(err._tag).toBe("ParseError")
+    })
+
+    test("works in Effect error pipeline", () => {
+        const err = new ParseError({ diagnostic, source })
+        const result = Effect.runSync(
+            Effect.fail(err).pipe(
+                Effect.catchTag("ParseError", (e) => Effect.succeed(e.render())),
+            ),
+        )
+        expect(result).toContain("error:")
+    })
+
+    test("Schema.decodeUnknownSync validates a ParseError", () => {
+        const raw = { _tag: "ParseError" as const, diagnostic, source }
+        const decoded = Schema.decodeUnknownSync(ParseError)(raw)
+        expect(decoded).toBeInstanceOf(ParseError)
+    })
+
+    test("Schema.validateSync validates a ParseError", () => {
+        const err = new ParseError({ diagnostic, source })
+        const validated = Schema.validateSync(ParseError)(err)
+        expect(validated).toBeInstanceOf(ParseError)
     })
 })

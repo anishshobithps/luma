@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test"
-import { Option } from "effect"
+import { Option, Schema } from "effect"
 import {
     Param, FnDecl, StructField, StructDecl, EnumVariant, EnumDecl,
-    TypeDecl, ImportDecl, Program,
+    TypeDecl, ImportDecl, Program, DeclSchema, TopLevelSchema,
 } from "@/ast/decl"
 import { BlockExpr, ExprStmt, IntLiteral, LetStmt } from "@/ast/expr"
 import { Span } from "@/diagnostic/span"
@@ -150,5 +150,109 @@ describe("Program", () => {
         const struct_ = new StructDecl({ name: "S", fields: [], span })
         const prog = new Program({ decls: [fn_, struct_], span })
         expect(prog.decls).toHaveLength(2)
+    })
+
+    test("program can hold expression statements", () => {
+        const stmt = new ExprStmt({ expr: new IntLiteral({ value: 1n, span }), span })
+        const prog = new Program({ decls: [stmt], span })
+        expect(prog.decls).toHaveLength(1)
+        expect((prog.decls[0] as ExprStmt)._tag).toBe("ExprStmt")
+        expect(((prog.decls[0] as ExprStmt).expr as IntLiteral).value).toBe(1n)
+    })
+})
+
+describe("DeclSchema", () => {
+    test("validates function declaration", () => {
+        const fn_ = new FnDecl({ name: "f", params: [], body: emptyBlock, exported: false, span })
+        expect(Schema.is(DeclSchema)(fn_)).toBe(true)
+    })
+
+    test("validates struct declaration", () => {
+        const s = new StructDecl({ name: "S", fields: [], span })
+        expect(Schema.is(DeclSchema)(s)).toBe(true)
+    })
+
+    test("validates enum declaration", () => {
+        const e = new EnumDecl({ name: "E", variants: [], span })
+        expect(Schema.is(DeclSchema)(e)).toBe(true)
+    })
+
+    test("validates type declaration", () => {
+        const t = new TypeDecl({ name: "T", alias: "U", span })
+        expect(Schema.is(DeclSchema)(t)).toBe(true)
+    })
+
+    test("validates import declaration", () => {
+        const i = new ImportDecl({ path: "math", alias: Option.none(), span })
+        expect(Schema.is(DeclSchema)(i)).toBe(true)
+    })
+
+    test("rejects non-declaration values", () => {
+        expect(Schema.is(DeclSchema)({ random: true })).toBe(false)
+    })
+})
+
+describe("TopLevelSchema", () => {
+    test("validates declarations", () => {
+        const fn_ = new FnDecl({ name: "f", params: [], body: emptyBlock, exported: false, span })
+        expect(Schema.is(TopLevelSchema)(fn_)).toBe(true)
+    })
+
+    test("validates statements", () => {
+        const stmt = new LetStmt({ name: "x", mutable: false, value: Option.none(), span })
+        expect(Schema.is(TopLevelSchema)(stmt)).toBe(true)
+    })
+
+    test("validates expression statements", () => {
+        const stmt = new ExprStmt({ expr: new IntLiteral({ value: 42n, span }), span })
+        expect(Schema.is(TopLevelSchema)(stmt)).toBe(true)
+    })
+})
+
+describe("make() factories", () => {
+    test("Param.make() creates a param", () => {
+        const p = Param.make({ name: "x", span })
+        expect(p).toBeInstanceOf(Param)
+        expect(p._tag).toBe("Param")
+    })
+
+    test("FnDecl.make() creates a function declaration", () => {
+        const fn_ = FnDecl.make({ name: "f", params: [], body: emptyBlock, exported: false, span })
+        expect(fn_).toBeInstanceOf(FnDecl)
+    })
+
+    test("StructField.make() creates a field", () => {
+        const f = StructField.make({ name: "x", span })
+        expect(f).toBeInstanceOf(StructField)
+    })
+
+    test("StructDecl.make() creates a struct", () => {
+        const s = StructDecl.make({ name: "S", fields: [], span })
+        expect(s).toBeInstanceOf(StructDecl)
+    })
+
+    test("EnumVariant.make() creates a variant", () => {
+        const v = EnumVariant.make({ name: "A", span })
+        expect(v).toBeInstanceOf(EnumVariant)
+    })
+
+    test("EnumDecl.make() creates an enum", () => {
+        const e = EnumDecl.make({ name: "E", variants: [], span })
+        expect(e).toBeInstanceOf(EnumDecl)
+    })
+
+    test("TypeDecl.make() creates a type", () => {
+        const t = TypeDecl.make({ name: "T", alias: "U", span })
+        expect(t).toBeInstanceOf(TypeDecl)
+    })
+
+    test("ImportDecl.make() creates an import", () => {
+        const i = ImportDecl.make({ path: "math", alias: Option.none(), span })
+        expect(i).toBeInstanceOf(ImportDecl)
+    })
+
+    test("Program.make() creates a program", () => {
+        const p = Program.make({ decls: [], span })
+        expect(p).toBeInstanceOf(Program)
     })
 })

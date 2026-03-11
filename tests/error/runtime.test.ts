@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
-import { Option } from "effect"
-import { RuntimeError, InternalError } from "@/error/runtime"
+import { Effect, Option, Schema } from "effect"
+import { RuntimeError, RuntimeErrorKind, InternalError } from "@/error/runtime"
 import { error } from "@/diagnostic/diagnostic"
 import { Span } from "@/diagnostic/span"
 
@@ -117,5 +117,63 @@ describe("InternalError", () => {
             cause: Option.none(),
         })
         expect(err).toBeInstanceOf(Error)
+    })
+})
+
+describe("RuntimeErrorKind", () => {
+    test("validates known kinds", () => {
+        expect(Schema.is(RuntimeErrorKind)("DivisionByZero")).toBe(true)
+        expect(Schema.is(RuntimeErrorKind)("StackOverflow")).toBe(true)
+        expect(Schema.is(RuntimeErrorKind)("NotAKind")).toBe(false)
+    })
+})
+
+describe("error make() factories", () => {
+    const source = "let x = 1 / 0"
+    const span = new Span({ file: "test.luma", line: 0, column: 10, length: 1 })
+    const diagnostic = error("division by zero", span)
+
+    test("RuntimeError.make() creates a RuntimeError", () => {
+        const err = RuntimeError.make({ kind: "DivisionByZero", diagnostic, source, callStack: [] })
+        expect(err).toBeInstanceOf(RuntimeError)
+        expect(err._tag).toBe("RuntimeError")
+    })
+
+    test("InternalError.make() creates an InternalError", () => {
+        const err = InternalError.make({ message: "broken", phase: "parser", cause: Option.none() })
+        expect(err).toBeInstanceOf(InternalError)
+        expect(err._tag).toBe("InternalError")
+    })
+
+    test("RuntimeError works in Effect error pipeline", () => {
+        const err = new RuntimeError({ kind: "DivisionByZero", diagnostic, source, callStack: [] })
+        const result = Effect.runSync(
+            Effect.fail(err).pipe(
+                Effect.catchTag("RuntimeError", (e) => Effect.succeed(e.kind)),
+            ),
+        )
+        expect(result).toBe("DivisionByZero")
+    })
+
+    test("InternalError works in Effect error pipeline", () => {
+        const err = new InternalError({ message: "broken", phase: "parser", cause: Option.none() })
+        const result = Effect.runSync(
+            Effect.fail(err).pipe(
+                Effect.catchTag("InternalError", (e) => Effect.succeed(e.phase)),
+            ),
+        )
+        expect(result).toBe("parser")
+    })
+
+    test("Schema.validateSync validates a RuntimeError", () => {
+        const err = new RuntimeError({ kind: "DivisionByZero", diagnostic, source, callStack: [] })
+        const validated = Schema.validateSync(RuntimeError)(err)
+        expect(validated).toBeInstanceOf(RuntimeError)
+    })
+
+    test("Schema.validateSync validates an InternalError", () => {
+        const err = new InternalError({ message: "broken", phase: "parser", cause: Option.none() })
+        const validated = Schema.validateSync(InternalError)(err)
+        expect(validated).toBeInstanceOf(InternalError)
     })
 })

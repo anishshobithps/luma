@@ -485,4 +485,20 @@ describe("parser - errors", () => {
     test("field access with non-identifier after dot", () => {
         expect(fails("obj.42;")).toBe(true)
     })
+
+    test("unexpected token in expression position", () => {
+        expect(fails(";")).toBe(true)
+    })
+
+    test("let with non-identifier name", () => {
+        expect(fails("let 42 = 1;")).toBe(true)
+    })
+
+    test("non-identifier in function parameter", () => {
+        expect(fails("fn f(42) {}")).toBe(true)
+    })
+
+    test("non-identifier in struct field", () => {
+        expect(fails("struct Foo { 42 }")).toBe(true)
+    })
 })

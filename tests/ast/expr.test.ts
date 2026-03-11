@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test"
-import { Option } from "effect"
+import { Option, Schema } from "effect"
 import {
     IntLiteral, FloatLiteral, StringLiteral, BoolLiteral, NilLiteral,
     Identifier, BinaryExpr, UnaryExpr, CallExpr, IndexExpr, FieldExpr,
     AssignExpr, RangeExpr, ArrayExpr, BlockExpr, IfExpr, MatchArm,
-    MatchExpr, LetStmt, ReturnStmt, ExprStmt,
+    MatchExpr, LetStmt, ReturnStmt, ExprStmt, ExprSchema, StmtSchema,
 } from "@/ast/expr"
 import { Span } from "@/diagnostic/span"
 
@@ -357,5 +357,162 @@ describe("ExprStmt", () => {
         const stmt = new ExprStmt({ expr: intLit(1n), span })
         expect(stmt._tag).toBe("ExprStmt")
         expect((stmt.expr as IntLiteral).value).toBe(1n)
+    })
+})
+
+describe("ExprSchema", () => {
+    test("validates a simple expression", () => {
+        expect(Schema.is(ExprSchema)(intLit(1n))).toBe(true)
+    })
+
+    test("validates a nested expression", () => {
+        const nested = new BinaryExpr({ op: "+", left: intLit(1n), right: intLit(2n), span })
+        expect(Schema.is(ExprSchema)(nested)).toBe(true)
+    })
+
+    test("validates a block expression", () => {
+        const block = new BlockExpr({ stmts: [new ExprStmt({ expr: intLit(1n), span })], span })
+        expect(Schema.is(ExprSchema)(block)).toBe(true)
+    })
+
+    test("validates an if expression", () => {
+        const block = new BlockExpr({ stmts: [], span })
+        const ifExpr = new IfExpr({ condition: boolLit(true), then: block, else_: Option.none(), span })
+        expect(Schema.is(ExprSchema)(ifExpr)).toBe(true)
+    })
+
+    test("validates a match expression", () => {
+        const arm = new MatchArm({ pattern: intLit(0n), body: intLit(1n), span })
+        const matchExpr = new MatchExpr({ scrutinee: ident("x"), arms: [arm], span })
+        expect(Schema.is(ExprSchema)(matchExpr)).toBe(true)
+    })
+
+    test("rejects non-expression values", () => {
+        expect(Schema.is(ExprSchema)({ random: true })).toBe(false)
+    })
+})
+
+describe("StmtSchema", () => {
+    test("validates a let statement", () => {
+        const stmt = new LetStmt({ name: "x", mutable: false, value: Option.none(), span })
+        expect(Schema.is(StmtSchema)(stmt)).toBe(true)
+    })
+
+    test("validates an expr statement", () => {
+        const stmt = new ExprStmt({ expr: intLit(1n), span })
+        expect(Schema.is(StmtSchema)(stmt)).toBe(true)
+    })
+
+    test("validates a return statement", () => {
+        const stmt = new ReturnStmt({ value: Option.none(), span })
+        expect(Schema.is(StmtSchema)(stmt)).toBe(true)
+    })
+})
+
+describe("make() factories", () => {
+    test("IntLiteral.make()", () => {
+        const n = IntLiteral.make({ value: 1n, span })
+        expect(n).toBeInstanceOf(IntLiteral)
+    })
+
+    test("FloatLiteral.make()", () => {
+        const f = FloatLiteral.make({ value: 1.5, span })
+        expect(f).toBeInstanceOf(FloatLiteral)
+    })
+
+    test("StringLiteral.make()", () => {
+        const s = StringLiteral.make({ value: "hi", span })
+        expect(s).toBeInstanceOf(StringLiteral)
+    })
+
+    test("BoolLiteral.make()", () => {
+        const b = BoolLiteral.make({ value: true, span })
+        expect(b).toBeInstanceOf(BoolLiteral)
+    })
+
+    test("NilLiteral.make()", () => {
+        const n = NilLiteral.make({ span })
+        expect(n).toBeInstanceOf(NilLiteral)
+    })
+
+    test("Identifier.make()", () => {
+        const id = Identifier.make({ name: "x", span })
+        expect(id).toBeInstanceOf(Identifier)
+    })
+
+    test("BinaryExpr.make()", () => {
+        const expr = BinaryExpr.make({ op: "+", left: intLit(1n), right: intLit(2n), span })
+        expect(expr).toBeInstanceOf(BinaryExpr)
+    })
+
+    test("UnaryExpr.make()", () => {
+        const expr = UnaryExpr.make({ op: "-", operand: intLit(1n), span })
+        expect(expr).toBeInstanceOf(UnaryExpr)
+    })
+
+    test("CallExpr.make()", () => {
+        const expr = CallExpr.make({ callee: ident("f"), args: [], span })
+        expect(expr).toBeInstanceOf(CallExpr)
+    })
+
+    test("IndexExpr.make()", () => {
+        const expr = IndexExpr.make({ target: ident("a"), index: intLit(0n), span })
+        expect(expr).toBeInstanceOf(IndexExpr)
+    })
+
+    test("FieldExpr.make()", () => {
+        const expr = FieldExpr.make({ target: ident("a"), field: "b", span })
+        expect(expr).toBeInstanceOf(FieldExpr)
+    })
+
+    test("AssignExpr.make()", () => {
+        const expr = AssignExpr.make({ target: ident("x"), op: "=", value: intLit(1n), span })
+        expect(expr).toBeInstanceOf(AssignExpr)
+    })
+
+    test("RangeExpr.make()", () => {
+        const expr = RangeExpr.make({ from: intLit(0n), to: intLit(10n), inclusive: false, span })
+        expect(expr).toBeInstanceOf(RangeExpr)
+    })
+
+    test("ArrayExpr.make()", () => {
+        const expr = ArrayExpr.make({ elements: [], span })
+        expect(expr).toBeInstanceOf(ArrayExpr)
+    })
+
+    test("BlockExpr.make()", () => {
+        const expr = BlockExpr.make({ stmts: [], span })
+        expect(expr).toBeInstanceOf(BlockExpr)
+    })
+
+    test("IfExpr.make()", () => {
+        const block = new BlockExpr({ stmts: [], span })
+        const expr = IfExpr.make({ condition: boolLit(true), then: block, else_: Option.none(), span })
+        expect(expr).toBeInstanceOf(IfExpr)
+    })
+
+    test("MatchArm.make()", () => {
+        const arm = MatchArm.make({ pattern: intLit(0n), body: intLit(1n), span })
+        expect(arm).toBeInstanceOf(MatchArm)
+    })
+
+    test("MatchExpr.make()", () => {
+        const expr = MatchExpr.make({ scrutinee: ident("x"), arms: [], span })
+        expect(expr).toBeInstanceOf(MatchExpr)
+    })
+
+    test("LetStmt.make()", () => {
+        const stmt = LetStmt.make({ name: "x", mutable: false, value: Option.none(), span })
+        expect(stmt).toBeInstanceOf(LetStmt)
+    })
+
+    test("ReturnStmt.make()", () => {
+        const stmt = ReturnStmt.make({ value: Option.none(), span })
+        expect(stmt).toBeInstanceOf(ReturnStmt)
+    })
+
+    test("ExprStmt.make()", () => {
+        const stmt = ExprStmt.make({ expr: intLit(1n), span })
+        expect(stmt).toBeInstanceOf(ExprStmt)
     })
 })

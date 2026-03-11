@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { render } from "@/diagnostic/renderer"
 import { error, warning, makeDiagnostic } from "@/diagnostic/diagnostic"
-import { secondaryLabel } from "@/diagnostic/label"
+import { secondaryLabel, noteLabel } from "@/diagnostic/label"
 import { Span } from "@/diagnostic/span"
 
 const source = "let x = 42\nlet y = x + 1\nlet z = oops"
@@ -74,5 +74,25 @@ describe("render", () => {
         const output = render(diag, source)
 
         expect(output).toContain("info: some info")
+    })
+
+    test("renders note label with tilde carets", () => {
+        const primarySpan = new Span({ file: "test.luma", line: 0, column: 0, length: 3 })
+        const noteSpan = new Span({ file: "test.luma", line: 1, column: 0, length: 3 })
+        const diag = makeDiagnostic("error", "problem", primarySpan, {
+            labels: [noteLabel(noteSpan, "see here")],
+        })
+        const output = render(diag, source)
+
+        expect(output).toContain("~~~ see here")
+    })
+
+    test("renders label for out-of-bounds line gracefully", () => {
+        const span = new Span({ file: "test.luma", line: 99, column: 0, length: 1 })
+        const diag = error("out of bounds", span)
+        const output = render(diag, source)
+
+        expect(output).toContain("error: out of bounds")
+        expect(output).toContain("--> test.luma:100:1")
     })
 })

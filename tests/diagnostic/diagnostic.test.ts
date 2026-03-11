@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
-import { Option } from "effect"
-import { Diagnostic, makeDiagnostic, error, warning } from "@/diagnostic/diagnostic"
+import { Option, Schema } from "effect"
+import { Diagnostic, DiagnosticSeverity, makeDiagnostic, error, warning } from "@/diagnostic/diagnostic"
 import { Span } from "@/diagnostic/span"
 import { secondaryLabel } from "@/diagnostic/label"
 
@@ -98,5 +98,72 @@ describe("warning", () => {
         const diag = warning("careful", span)
         expect(diag.severity).toBe("warning")
         expect(diag.message).toBe("careful")
+    })
+})
+
+describe("DiagnosticSeverity", () => {
+    test("validates known severities", () => {
+        expect(Schema.is(DiagnosticSeverity)("error")).toBe(true)
+        expect(Schema.is(DiagnosticSeverity)("warning")).toBe(true)
+        expect(Schema.is(DiagnosticSeverity)("info")).toBe(true)
+        expect(Schema.is(DiagnosticSeverity)("unknown")).toBe(false)
+    })
+})
+
+describe("Diagnostic schema", () => {
+    test("make() creates a diagnostic", () => {
+        const diag = Diagnostic.make({
+            severity: "error",
+            code: Option.none(),
+            message: "test",
+            labels: [],
+            notes: [],
+            hints: [],
+        })
+        expect(diag).toBeInstanceOf(Diagnostic)
+        expect(diag.severity).toBe("error")
+    })
+
+    test("encodeSync round-trips a diagnostic", () => {
+        const diag = new Diagnostic({
+            severity: "error",
+            code: Option.none(),
+            message: "test",
+            labels: [],
+            notes: [],
+            hints: [],
+        })
+        const encoded = Schema.encodeSync(Diagnostic)(diag)
+        expect(encoded.severity).toBe("error")
+        expect(encoded.message).toBe("test")
+    })
+
+    test("decodeUnknownSync creates a Diagnostic from encoded data", () => {
+        const diag = new Diagnostic({
+            severity: "warning",
+            code: Option.some("W001"),
+            message: "unused",
+            labels: [],
+            notes: [],
+            hints: [],
+        })
+        const encoded = Schema.encodeSync(Diagnostic)(diag)
+        const decoded = Schema.decodeUnknownSync(Diagnostic)(encoded)
+        expect(decoded).toBeInstanceOf(Diagnostic)
+        expect(decoded.severity).toBe("warning")
+        expect(decoded.message).toBe("unused")
+    })
+
+    test("validateSync validates a Diagnostic", () => {
+        const diag = new Diagnostic({
+            severity: "error",
+            code: Option.none(),
+            message: "test",
+            labels: [],
+            notes: [],
+            hints: [],
+        })
+        const validated = Schema.validateSync(Diagnostic)(diag)
+        expect(validated).toBeInstanceOf(Diagnostic)
     })
 })

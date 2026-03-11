@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
-import { Token, type TokenKind } from "@/lexer/token"
+import { Schema } from "effect"
+import { Token, TokenKind, type TokenKind as TokenKindType } from "@/lexer/token"
 import { Span } from "@/diagnostic/span"
 
 describe("Token", () => {
@@ -100,5 +101,24 @@ describe("Token", () => {
         const tok = new Token({ kind: "Identifier", lexeme: "myVar", span: idSpan })
         expect(tok.kind).toBe("Identifier")
         expect(tok.lexeme).toBe("myVar")
+    })
+
+    test("make() creates a token", () => {
+        const tok = Token.make({ kind: "Let", lexeme: "let", span })
+        expect(tok).toBeInstanceOf(Token)
+        expect(tok.kind).toBe("Let")
+    })
+
+    test("TokenKind schema validates known kinds", () => {
+        expect(Schema.is(TokenKind)("Let")).toBe(true)
+        expect(Schema.is(TokenKind)("Eof")).toBe(true)
+        expect(Schema.is(TokenKind)("NotAKind")).toBe(false)
+    })
+
+    test("encodeSync round-trips a token", () => {
+        const tok = new Token({ kind: "Plus", lexeme: "+", span })
+        const encoded = Schema.encodeSync(Token)(tok)
+        expect(encoded.kind).toBe("Plus")
+        expect(encoded.lexeme).toBe("+")
     })
 })
