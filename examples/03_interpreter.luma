@@ -1,0 +1,11 @@
+// Demonstrates the luma interpreter in action.
+// Run: bun run scripts/run_interpreter.ts examples/03_interpreter.luma
+
+print("Fibonacci Example");
+
+fn fibonacci(n) {
+    if n <= 1 { return n; }
+    return fibonacci(n - 1) + fibonacci(n - 2);
+}
+
+print("Fibonacci of 10 :" + str(fibonacci(10)));

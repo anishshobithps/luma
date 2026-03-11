@@ -4,7 +4,8 @@ import {
     IntLiteral, FloatLiteral, StringLiteral, BoolLiteral, NilLiteral,
     Identifier, BinaryExpr, UnaryExpr, CallExpr, IndexExpr, FieldExpr,
     AssignExpr, RangeExpr, ArrayExpr, BlockExpr, IfExpr, MatchArm,
-    MatchExpr, LetStmt, ReturnStmt, ExprStmt, ExprSchema, StmtSchema,
+    MatchExpr, WhileExpr, ForExpr, BreakExpr, ContinueExpr,
+    LetStmt, ReturnStmt, ExprStmt, ExprSchema, StmtSchema,
 } from "@/ast/expr"
 import { Span } from "@/diagnostic/span"
 
@@ -514,5 +515,63 @@ describe("make() factories", () => {
     test("ExprStmt.make()", () => {
         const stmt = ExprStmt.make({ expr: intLit(1n), span })
         expect(stmt).toBeInstanceOf(ExprStmt)
+    })
+
+    test("WhileExpr.make()", () => {
+        const block = new BlockExpr({ stmts: [], span })
+        const expr = WhileExpr.make({ condition: boolLit(true), body: block, span })
+        expect(expr).toBeInstanceOf(WhileExpr)
+    })
+
+    test("ForExpr.make()", () => {
+        const block = new BlockExpr({ stmts: [], span })
+        const expr = ForExpr.make({ variable: "i", iterable: ident("items"), body: block, span })
+        expect(expr).toBeInstanceOf(ForExpr)
+    })
+
+    test("BreakExpr.make()", () => {
+        const expr = BreakExpr.make({ span })
+        expect(expr).toBeInstanceOf(BreakExpr)
+    })
+
+    test("ContinueExpr.make()", () => {
+        const expr = ContinueExpr.make({ span })
+        expect(expr).toBeInstanceOf(ContinueExpr)
+    })
+})
+
+describe("WhileExpr", () => {
+    test("stores condition and body", () => {
+        const block = new BlockExpr({ stmts: [], span })
+        const expr = new WhileExpr({ condition: boolLit(true), body: block, span })
+        expect(expr._tag).toBe("WhileExpr")
+        expect((expr.condition as BoolLiteral).value).toBe(true)
+        expect(expr.body.stmts).toHaveLength(0)
+    })
+})
+
+describe("ForExpr", () => {
+    test("stores variable, iterable, and body", () => {
+        const block = new BlockExpr({ stmts: [], span })
+        const expr = new ForExpr({ variable: "i", iterable: ident("items"), body: block, span })
+        expect(expr._tag).toBe("ForExpr")
+        expect(expr.variable).toBe("i")
+        expect((expr.iterable as Identifier).name).toBe("items")
+    })
+})
+
+describe("BreakExpr", () => {
+    test("has correct tag and span", () => {
+        const expr = new BreakExpr({ span })
+        expect(expr._tag).toBe("BreakExpr")
+        expect(expr.span).toBe(span)
+    })
+})
+
+describe("ContinueExpr", () => {
+    test("has correct tag and span", () => {
+        const expr = new ContinueExpr({ span })
+        expect(expr._tag).toBe("ContinueExpr")
+        expect(expr.span).toBe(span)
     })
 })

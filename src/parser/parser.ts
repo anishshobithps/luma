@@ -457,15 +457,15 @@ const parseRange = (state: ParseState): PR<Expr> =>
     pipe(
         parseBitOr(state),
         Either.flatMap(([left, s1]) => {
-            if (!check(s1, "DotDot")) return Either.right([left, s1] as [Expr, ParseState])
+            const isDotDot = check(s1, "DotDot")
+            const isDotDotEqual = check(s1, "DotDotEqual")
+            if (!isDotDot && !isDotDotEqual) return Either.right([left, s1] as [Expr, ParseState])
             const [, s2] = advance(s1)
-            const inclusive = check(s2, "Equal")
-            const s3 = inclusive ? advance(s2)[1] : s2
             return pipe(
-                parseBitOr(s3),
-                Either.map(([right, s4]) => [
-                    new RangeExpr({ from: left, to: right, inclusive, span: left.span }),
-                    s4,
+                parseBitOr(s2),
+                Either.map(([right, s3]) => [
+                    new RangeExpr({ from: left, to: right, inclusive: isDotDotEqual, span: left.span }),
+                    s3,
                 ] as [Expr, ParseState])
             )
         })
