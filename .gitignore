@@ -5,6 +5,8 @@ node_modules
 out
 dist
 *.tgz
+luma
+luma.exe
 
 # code coverage
 coverage
