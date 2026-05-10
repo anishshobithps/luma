@@ -1,36 +1,43 @@
-# dependencies (bun install)
-node_modules
+# OCaml / dune
+_build/
+*.byte
+*.native
+*.cmo
+*.cmi
+*.cmx
+*.cmxa
+*.cma
+*.o
+*.a
+*.so
+.merlin
+*.install
+luma.opam
 
-# output
-out
-dist
-*.tgz
-luma
-luma.exe
+# opam
+.opam-switch/
+_opam/
 
-# code coverage
-coverage
-*.lcov
+# ocamlformat
+.ocamlformat-ignore
 
-# logs
-logs
-_.log
-report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
+# Bun / Node
+node_modules/
+bun.lockb
 
-# dotenv environment variable files
-.env
-.env.development.local
-.env.test.local
-.env.production.local
-.env.local
+# TypeScript
+*.js
+*.d.ts
+dist/
+out/
 
-# caches
-.eslintcache
-.cache
-*.tsbuildinfo
+# temp files luma CLI emits
+.luma-tmp/
+*.tmp.ts
 
-# IntelliJ based IDEs
-.idea
-
-# Finder (MacOS) folder config
+# OS
 .DS_Store
+Thumbs.db
+
+# VS Code
+.vscode/
